@@ -4,7 +4,20 @@ import numpy as np
 import os
 import sys
 
-def enhance_gif(input_path, output_path, scale_factor=2, fps=15, quality=90):
+def get_gif_fps(gif_path):
+    """
+    Get the frame rate of a GIF.
+    Returns default fps if not found in metadata.
+    """
+    try:
+        gif = imageio.get_reader(gif_path)
+        fps = gif.get_meta_data()['fps']
+        gif.close()
+        return fps
+    except (KeyError, TypeError):
+        return 15  # Default FPS if not found
+
+def enhance_gif(input_path, output_path, scale_factor=2, fps=None, quality=90):
     """
     Enhance a GIF by increasing resolution, optimizing frame rate, and improving quality.
     
@@ -12,7 +25,7 @@ def enhance_gif(input_path, output_path, scale_factor=2, fps=15, quality=90):
         input_path: Path to input GIF
         output_path: Path to save enhanced GIF
         scale_factor: How much to increase the size (default: 2x)
-        fps: Frames per second (default: 15)
+        fps: Frames per second (if None, uses original GIF's fps)
         quality: Output quality (0-100, default: 90)
     """
     # Read the GIF
@@ -22,6 +35,10 @@ def enhance_gif(input_path, output_path, scale_factor=2, fps=15, quality=90):
     first_frame = gif.get_data(0)
     new_width = first_frame.shape[1] * scale_factor
     new_height = first_frame.shape[0] * scale_factor
+    
+    # Get FPS from original GIF if not specified
+    if fps is None:
+        fps = get_gif_fps(input_path)
     
     # Create a writer for the enhanced GIF
     writer = imageio.get_writer(output_path, fps=fps, quality=quality, loop=0)
@@ -41,6 +58,7 @@ def enhance_gif(input_path, output_path, scale_factor=2, fps=15, quality=90):
         writer.append_data(enhanced_frame)
     
     writer.close()
+    gif.close()
 
 def wrap_text(text, font, max_width):
     """
@@ -72,7 +90,7 @@ def wrap_text(text, font, max_width):
 
 def add_caption_to_gif(input_path, output_path, top_caption=None, bottom_caption=None, 
                       font_size=30, font_color=(255, 255, 255), stroke_color=(0, 0, 0),
-                      margin=20, border_size=50, min_border_size=100):
+                      margin=20, border_size=50, min_border_size=100, fps=None):
     """
     Add captions to a GIF with improved text rendering and white border.
     
@@ -87,6 +105,7 @@ def add_caption_to_gif(input_path, output_path, top_caption=None, bottom_caption
         margin: Distance from the edge in pixels
         border_size: Size of the white border in pixels
         min_border_size: Minimum size of the border when text is present
+        fps: Frames per second (if None, uses original GIF's fps)
     """
     # Read the GIF
     gif = imageio.get_reader(input_path)
@@ -94,6 +113,10 @@ def add_caption_to_gif(input_path, output_path, top_caption=None, bottom_caption
     # Get the first frame to determine dimensions
     first_frame = gif.get_data(0)
     width, height = first_frame.shape[1], first_frame.shape[0]
+    
+    # Get FPS from original GIF if not specified
+    if fps is None:
+        fps = get_gif_fps(input_path)
     
     # Load a font (you may need to specify a different font path)
     try:
@@ -132,12 +155,6 @@ def add_caption_to_gif(input_path, output_path, top_caption=None, bottom_caption
     # Calculate new dimensions with borders
     new_width = width + (2 * border_size)  # Keep side borders the same
     new_height = height + (2 * border_size) + required_top + required_bottom
-    
-    # Get FPS from metadata or use default
-    try:
-        fps = gif.get_meta_data()['fps']
-    except (KeyError, TypeError):
-        fps = 15  # Default FPS if not found in metadata
     
     # Create a writer for the captioned GIF
     writer = imageio.get_writer(output_path, fps=fps, loop=0)
@@ -198,6 +215,7 @@ def add_caption_to_gif(input_path, output_path, top_caption=None, bottom_caption
         writer.append_data(captioned_frame)
     
     writer.close()
+    gif.close()
 
 # Example usage
 if __name__ == "__main__":
@@ -210,10 +228,13 @@ if __name__ == "__main__":
     top_caption = sys.argv[2] if len(sys.argv) > 2 else None
     bottom_caption = sys.argv[3] if len(sys.argv) > 3 else None
     
+    # Get original GIF's frame rate
+    original_fps = get_gif_fps(input_path)
+    
     # First enhance the GIF
     enhance_gif(input_path, enhanced_gif, 
                scale_factor=2,    # Increase size (adjust as needed)
-               fps=24,            # Frames per second
+               fps=original_fps,  # Use original frame rate
                quality=90)        # Quality (0-100)
     
     # Then add captions with white border
@@ -224,4 +245,5 @@ if __name__ == "__main__":
                       font_color=(0,0,0),     # Black text
                       stroke_color=(255,255,255), # White outline
                       border_size=50,         # Base border size
-                      min_border_size=100)    # Minimum border size when text is present 
+                      min_border_size=100,    # Minimum border size when text is present
+                      fps=original_fps)       # Use original frame rate 
