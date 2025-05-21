@@ -70,20 +70,20 @@ def wrap_text(text, font, max_width):
     
     return lines
 
-def add_caption_to_gif(input_path, output_path, caption, font_size=30, 
-                      font_color=(255, 255, 255), stroke_color=(0, 0, 0),
-                      position='top', margin=20, border_size=50, min_border_size=100):
+def add_caption_to_gif(input_path, output_path, top_caption=None, bottom_caption=None, 
+                      font_size=30, font_color=(255, 255, 255), stroke_color=(0, 0, 0),
+                      margin=20, border_size=50, min_border_size=100):
     """
-    Add a caption to a GIF with improved text rendering and white border.
+    Add captions to a GIF with improved text rendering and white border.
     
     Args:
         input_path: Path to input GIF
         output_path: Path to save captioned GIF
-        caption: Text to add as caption
+        top_caption: Text to add at the top (optional)
+        bottom_caption: Text to add at the bottom (optional)
         font_size: Size of the font
         font_color: RGB color of the text
         stroke_color: RGB color of the text outline
-        position: 'top' or 'bottom' to control vertical position
         margin: Distance from the edge in pixels
         border_size: Size of the white border in pixels
         min_border_size: Minimum size of the border when text is present
@@ -101,23 +101,37 @@ def add_caption_to_gif(input_path, output_path, caption, font_size=30,
     except:
         font = ImageFont.load_default()
     
-    # Wrap the caption text
-    max_width = width + (2 * border_size) - (2 * margin)  # Leave some margin on the sides
-    wrapped_lines = wrap_text(caption, font, max_width)
+    # Process top caption if provided
+    top_lines = []
+    top_height = 0
+    if top_caption:
+        max_width = width + (2 * border_size) - (2 * margin)
+        top_lines = wrap_text(top_caption, font, max_width)
+        line_height = font_size + 5
+        top_height = len(top_lines) * line_height
+        required_top_border = top_height + (2 * margin)
+    else:
+        required_top_border = 0
     
-    # Calculate total height of wrapped text
-    line_height = font_size + 5  # Add some padding between lines
-    total_text_height = len(wrapped_lines) * line_height
+    # Process bottom caption if provided
+    bottom_lines = []
+    bottom_height = 0
+    if bottom_caption:
+        max_width = width + (2 * border_size) - (2 * margin)
+        bottom_lines = wrap_text(bottom_caption, font, max_width)
+        line_height = font_size + 5
+        bottom_height = len(bottom_lines) * line_height
+        required_bottom_border = bottom_height + (2 * margin)
+    else:
+        required_bottom_border = 0
     
-    # Calculate required border size for text
-    required_border = total_text_height + (2 * margin)  # Add margin above and below text
+    # Calculate required border sizes
+    required_top = max(required_top_border, min_border_size if top_caption else 0)
+    required_bottom = max(required_bottom_border, min_border_size if bottom_caption else 0)
     
-    # Use the larger of the required border or minimum border size
-    actual_border_size = max(required_border, min_border_size)
-    
-    # Calculate new dimensions with border
+    # Calculate new dimensions with borders
     new_width = width + (2 * border_size)  # Keep side borders the same
-    new_height = height + (2 * border_size) + (actual_border_size - border_size)  # Add extra height for text
+    new_height = height + (2 * border_size) + required_top + required_bottom
     
     # Get FPS from metadata or use default
     try:
@@ -137,32 +151,45 @@ def add_caption_to_gif(input_path, output_path, caption, font_size=30,
         bordered_frame = Image.new('RGB', (new_width, new_height), 'white')
         
         # Paste the original frame in the center
-        bordered_frame.paste(pil_frame, (border_size, actual_border_size))
+        bordered_frame.paste(pil_frame, (border_size, border_size + required_top))
         
         draw = ImageDraw.Draw(bordered_frame)
         
-        # Calculate starting y position based on desired location
-        if position.lower() == 'top':
-            y = (actual_border_size - total_text_height) // 2  # Center in top border
-        else:  # bottom
-            y = new_height - border_size + (border_size - total_text_height) // 2  # Center in bottom border
+        # Draw top caption if provided
+        if top_caption:
+            y = (required_top - top_height) // 2  # Center in top border
+            for line in top_lines:
+                text_bbox = draw.textbbox((0, 0), line, font=font)
+                text_width = text_bbox[2] - text_bbox[0]
+                x = (new_width - text_width) // 2
+                
+                # Draw text with stroke (outline)
+                for offset_x, offset_y in [(-1,-1), (-1,1), (1,-1), (1,1)]:
+                    draw.text((x + offset_x, y + offset_y), line, font=font, fill=stroke_color)
+                
+                # Draw main text
+                draw.text((x, y), line, font=font, fill=font_color)
+                
+                # Move to next line
+                y += font_size + 5
         
-        # Draw each line of wrapped text
-        for line in wrapped_lines:
-            # Calculate text position for this line
-            text_bbox = draw.textbbox((0, 0), line, font=font)
-            text_width = text_bbox[2] - text_bbox[0]
-            x = (new_width - text_width) // 2
-            
-            # Draw text with stroke (outline)
-            for offset_x, offset_y in [(-1,-1), (-1,1), (1,-1), (1,1)]:
-                draw.text((x + offset_x, y + offset_y), line, font=font, fill=stroke_color)
-            
-            # Draw main text
-            draw.text((x, y), line, font=font, fill=font_color)
-            
-            # Move to next line
-            y += line_height
+        # Draw bottom caption if provided
+        if bottom_caption:
+            y = new_height - required_bottom + (required_bottom - bottom_height) // 2
+            for line in bottom_lines:
+                text_bbox = draw.textbbox((0, 0), line, font=font)
+                text_width = text_bbox[2] - text_bbox[0]
+                x = (new_width - text_width) // 2
+                
+                # Draw text with stroke (outline)
+                for offset_x, offset_y in [(-1,-1), (-1,1), (1,-1), (1,1)]:
+                    draw.text((x + offset_x, y + offset_y), line, font=font, fill=stroke_color)
+                
+                # Draw main text
+                draw.text((x, y), line, font=font, fill=font_color)
+                
+                # Move to next line
+                y += font_size + 5
         
         # Convert back to numpy array
         captioned_frame = np.array(bordered_frame)
@@ -174,22 +201,27 @@ def add_caption_to_gif(input_path, output_path, caption, font_size=30,
 
 # Example usage
 if __name__ == "__main__":
-    input_gif = sys.argv[1]  # Your input GIF
-    enhanced_gif = f"enhanced-{input_gif}"  # Temporary enhanced version
-    final_gif = f"final-{input_gif}"       # Final output with caption
+    input_path = sys.argv[1]  # Full path to input GIF
+    input_filename = input_path.split('/')[-1]  # Just the filename
+    enhanced_gif = f"enhanced-{input_filename}"  # Temporary enhanced version
+    final_gif = f"final-{input_filename}"       # Final output with caption
+    
+    # Get captions from command line arguments
+    top_caption = sys.argv[2] if len(sys.argv) > 2 else None
+    bottom_caption = sys.argv[3] if len(sys.argv) > 3 else None
     
     # First enhance the GIF
-    enhance_gif(input_gif, enhanced_gif, 
+    enhance_gif(input_path, enhanced_gif, 
                scale_factor=2,    # Increase size (adjust as needed)
-               fps=15,            # Frames per second
+               fps=24,            # Frames per second
                quality=90)        # Quality (0-100)
     
-    # Then add caption at the top with white border
+    # Then add captions with white border
     add_caption_to_gif(enhanced_gif, final_gif, 
-                      sys.argv[2],
+                      top_caption=top_caption,
+                      bottom_caption=bottom_caption,
                       font_size=70,          # Adjust text size
                       font_color=(0,0,0),     # Black text
                       stroke_color=(255,255,255), # White outline
-                      position='top',         # Place caption at top
                       border_size=50,         # Base border size
                       min_border_size=100)    # Minimum border size when text is present 
