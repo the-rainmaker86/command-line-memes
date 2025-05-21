@@ -10,29 +10,41 @@ then
     exit 1
 fi 
 
+# Function to calculate font size based on image dimensions
+calculate_font_size() {
+    local width=$1
+    local base_size=70
+    local min_size=40
+    local max_size=150
+    local reference_width=800
+    
+    # Calculate scale factor
+    local scale_factor=$(echo "scale=2; $width / $reference_width" | bc)
+    
+    # Calculate new font size
+    local new_size=$(echo "scale=0; $base_size * $scale_factor / 1" | bc)
+    
+    # Clamp between min and max sizes
+    if [ $new_size -lt $min_size ]; then
+        new_size=$min_size
+    elif [ $new_size -gt $max_size ]; then
+        new_size=$max_size
+    fi
+    
+    echo $new_size
+}
 
 # Get the image path, top text, and bottom text from the command line arguments
 image_path=$1
 top_text=$2
 bottom_text=$3
 
-# Generate the meme using ImageMagick with word wrapping
+# Get image dimensions
+width=$(identify -format "%w" "$image_path")
+height=$(identify -format "%h" "$image_path")
 
-# convert -background white -font Helvetica -pointsize 100 -gravity North -size 1600x caption:"$top_text" \
-#     $image_path -gravity South -background white -font Helvetica -pointsize 100 -gravity South -size 1600x caption:"$bottom_text" \
-#     -append meme.jpg
-# convert -background white -font Helvetica -pointsize 100 -fill black -gravity North -size 1600x caption:"$top_text" \
-#     -splice 0x50 $image_path -gravity South -background white -font Helvetica -pointsize 100 -fill black -gravity South -size 1600x caption:"$bottom_text" \
-#     -splice 0x50 -append -fuzz 10% -trim -bordercolor white -border 75x50 meme.png
-        
-# if [ $? -eq 0 ]; then
-#     echo "Meme opened successfully."
-# else
-#     echo "Error: Failed to open meme."
-#     exit 1
-# fi
-# This script is for educational purposes only
-# It is not recommended to run infinite loops in production environments
+# Calculate dynamic font size
+font_size=$(calculate_font_size $width)
 
 # Check if the input file is a GIF
 echo "Input file: $image_path"
@@ -43,22 +55,70 @@ if file "$image_path" | grep -q "GIF image data"; then
     convert "$image_path" gif_frames/frame_%04d.png
     echo "it's a gif"
 
+    # Get original delay (fps) from the GIF
+    delay=$(identify -format "%T\n" "$image_path" | head -n 1)
+    if [ -z "$delay" ]; then
+        delay=10  # Default delay if not found
+    fi
+
     # Caption each frame
     for frame in gif_frames/frame_*.png; do
-        convert -background white -font Helvetica -pointsize 100 -fill black -gravity North -size 1600x caption:"$top_text" \
-            -splice 0x50 "$frame" -gravity South -background white -font Helvetica -pointsize 100 -fill black -gravity South -size 1600x caption:"$bottom_text" \
-            -splice 0x50 -append -fuzz 10% -trim -bordercolor white -border 75x50 "$frame"
+        convert -background white \
+            -font Helvetica \
+            -pointsize $font_size \
+            -fill black \
+            -gravity North \
+            -size ${width}x \
+            caption:"$top_text" \
+            -splice 0x50 \
+            "$frame" \
+            -gravity South \
+            -background white \
+            -font Helvetica \
+            -pointsize $font_size \
+            -fill black \
+            -gravity South \
+            -size ${width}x \
+            caption:"$bottom_text" \
+            -splice 0x50 \
+            -append \
+            -fuzz 10% \
+            -trim \
+            -bordercolor white \
+            -border 75x50 \
+            "$frame"
     done
 
-    # Reassemble the frames into a new GIF
-    convert -delay 0 -loop 0 gif_frames/frame_*.png captioned_"$image_path"
+    # Reassemble the frames into a new GIF with original delay
+    convert -delay $delay -loop 0 gif_frames/frame_*.png captioned_"$image_path"
 
     # Clean up temporary frames
-    # rm -r gif_frames
+    rm -r gif_frames
 else
     # Process static images
-    convert -background white -font Helvetica -pointsize 100 -fill black -gravity North -size 1600x caption:"$top_text" \
-        -splice 0x50 "$image_path" -gravity South -background white -font Helvetica -pointsize 100 -fill black -gravity South -size 1600x caption:"$bottom_text" \
-        -splice 0x50 -append -fuzz 10% -trim -bordercolor white -border 75x50 meme.png
+    convert -background white \
+        -font Helvetica \
+        -pointsize $font_size \
+        -fill black \
+        -gravity North \
+        -size ${width}x \
+        caption:"$top_text" \
+        -splice 0x50 \
+        "$image_path" \
+        -gravity South \
+        -background white \
+        -font Helvetica \
+        -pointsize $font_size \
+        -fill black \
+        -gravity South \
+        -size ${width}x \
+        caption:"$bottom_text" \
+        -splice 0x50 \
+        -append \
+        -fuzz 10% \
+        -trim \
+        -bordercolor white \
+        -border 75x50 \
+        meme.png
 fi
 

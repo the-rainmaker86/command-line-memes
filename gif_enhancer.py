@@ -88,8 +88,29 @@ def wrap_text(text, font, max_width):
     
     return lines
 
+def calculate_font_size(width, height, base_size=70, min_size=40, max_size=150):
+    """
+    Calculate appropriate font size based on image dimensions.
+    
+    Args:
+        width: Image width
+        height: Image height
+        base_size: Base font size for reference width
+        min_size: Minimum font size
+        max_size: Maximum font size
+    """
+    # Use width as the primary dimension for scaling
+    reference_width = 800  # Reference width for base_size
+    scale_factor = width / reference_width
+    
+    # Calculate new font size
+    new_size = int(base_size * scale_factor)
+    
+    # Clamp between min and max sizes
+    return max(min_size, min(new_size, max_size))
+
 def add_caption_to_gif(input_path, output_path, top_caption=None, bottom_caption=None, 
-                      font_size=30, font_color=(255, 255, 255), stroke_color=(0, 0, 0),
+                      font_size=None, font_color=(255, 255, 255), stroke_color=(0, 0, 0),
                       margin=20, border_size=50, min_border_size=100, fps=None):
     """
     Add captions to a GIF with improved text rendering and white border.
@@ -99,7 +120,7 @@ def add_caption_to_gif(input_path, output_path, top_caption=None, bottom_caption
         output_path: Path to save captioned GIF
         top_caption: Text to add at the top (optional)
         bottom_caption: Text to add at the bottom (optional)
-        font_size: Size of the font
+        font_size: Size of the font (if None, calculated based on image size)
         font_color: RGB color of the text
         stroke_color: RGB color of the text outline
         margin: Distance from the edge in pixels
@@ -113,6 +134,10 @@ def add_caption_to_gif(input_path, output_path, top_caption=None, bottom_caption
     # Get the first frame to determine dimensions
     first_frame = gif.get_data(0)
     width, height = first_frame.shape[1], first_frame.shape[0]
+    
+    # Calculate font size if not provided
+    if font_size is None:
+        font_size = calculate_font_size(width, height)
     
     # Get FPS from original GIF if not specified
     if fps is None:
@@ -241,7 +266,7 @@ if __name__ == "__main__":
     add_caption_to_gif(enhanced_gif, final_gif, 
                       top_caption=top_caption,
                       bottom_caption=bottom_caption,
-                      font_size=70,          # Adjust text size
+                      font_size=None,          # Will be calculated based on image size
                       font_color=(0,0,0),     # Black text
                       stroke_color=(255,255,255), # White outline
                       border_size=50,         # Base border size
